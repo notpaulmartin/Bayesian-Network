@@ -75,21 +75,23 @@ test_p_Primitive = TestList [
 
 test_p_And :: Test
 test_p_And = TestList [
-        TestCase (assertEqual' "P(a,b)"  0.45 (p [IS a, IS b] [])),
-        TestCase (assertEqual' "P(¬a,b)" 0.05 (p [NOT a, IS b] [])),
-        TestCase (assertEqual' "P(c,a,¬b)"  0.315 (p [IS c, IS a, NOT b] []))
+        TestCase (assertEqual' "P(a,b)"    0.45  (p [IS a, IS b] [])),
+        TestCase (assertEqual' "P(¬a,b)"   0.05  (p [NOT a, IS b] [])),
+        TestCase (assertEqual' "P(c,a,¬b)" 0.315 (p [IS c, IS a, NOT b] []))
     ]
 
 -- Test automatic insertion of arbitrary RVs: P(c) = P(c, A, B)
 test_p_Arb :: Test
 test_p_Arb = TestList [
-        TestCase (assertEqual' "P(c)"  0.778 (p [IS c] [])),
-        TestCase (assertEqual' "P(c,a)"  0.778 (p [IS c] []))
+        TestCase (assertEqual' "P(c)"   0.778 (p [IS c] [])),
+        TestCase (assertEqual' "P(c,a)" 0.778 (p [IS c] []))
     ]
 
 test_p_Conds :: Test
 test_p_Conds = TestList [
-        TestCase (assertEqual' "P(c|a,b)"  0.94 (p [IS c] [IS a, IS b]))
+        TestCase (assertEqual' "P(c|a,b)" 0.94   (p [IS c] [IS a, IS b])),
+        TestCase (assertEqual' "P(c|a,B)" 0.82   (p [IS c] [IS a])),
+        TestCase (assertEqual' "P(b|c)"   0.5951 (p [IS b] [IS c]))
     ]
 
 allTests :: Test

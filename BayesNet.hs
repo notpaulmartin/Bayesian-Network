@@ -3,7 +3,7 @@
 -- File Created:  Wednesday, 17th March 2021 10:50:48 am
 -- Author(s):     Paul Martin
 --
--- Last Modified: Wednesday, 17th March 2021 10:50:49 am
+-- Last Modified: Thursday, 18th March 2021 18:10 pm
 -- Modified By:   Paul Martin
 
 module BayesNet where
@@ -24,17 +24,7 @@ fromJust' _ (Just y) = y
 -- Probability
 type Prob = Float
 
-
---                         Parent  Probability of inhibition
-data Inhibitor = Inhibitor RV      Prob | UnInhibited
-
-instance Eq Inhibitor where
-    (Inhibitor (BoolRV a _ _) p1) == (Inhibitor (BoolRV b _ _) p2) =
-        a == b && p1 == p2
-
 type Inhibitors = Map RV Prob
-
--- data PrimBoolRV =
 
 data BoolRV =
     BoolRV
@@ -80,6 +70,14 @@ instance Show State where
     show (NOT a) = "¬" ++ show a
     show (ARB a) = "?" ++ show a
 
+neg :: State -> State
+neg (IS a)  = NOT a
+neg (NOT a) = IS a
+neg x       = x
+
+negateStates :: [State] -> [State]
+negateStates = map neg
+
 rvOf :: State -> RV
 rvOf (IS a)  = a
 rvOf (NOT a) = a
@@ -123,9 +121,6 @@ p [] _                      = 1
 p [IS (PrimBoolRV _ x)] []  = x
 p [NOT (PrimBoolRV _ x)] [] = 1 - x
 
--- P(a) = P(a, b) + P(a, ¬b) | for all b in Parents(a)
--- p [state] [] = p (state : [ARB a | a <- parents (rvOf state)]) []
-
 -- P(a,¬b,C,D)
 p states [] | not (null parentsNotContained) = p (states ++ arbStates) []
             | containsArbs = sum [p pureStates [] | pureStates <- dissociate states ] -- Marginalise
@@ -134,78 +129,20 @@ p states [] | not (null parentsNotContained) = p (states ++ arbStates) []
         trueParents :: RV -> [RV]
         trueParents x = [ a | (IS a) <- states, a `elem` parents x ]  -- parents of x that are true in states
 
-        rvsInStates, allParents :: [RV]
+        rvsInStates, allParents, parentsNotContained :: [RV]
         rvsInStates = map rvOf states
-
         allParents = foldl' union [] [parents a | a <- rvsInStates]
-
-        parentsNotContained :: [RV]
         parentsNotContained = [parent | parent <- allParents, parent `notElem` rvsInStates]
+
+        arbStates :: [State]
         arbStates = [ARB a | a <- parentsNotContained]
 
         containsArbs :: Bool
         containsArbs = or [True | (ARB _) <- states]
 
-
--- P(a | xs)
-p [state] conds | allCondsAreParents = pTable state positiveConds  -- Simple table lookup
-                | otherwise = undefined   -- TODO: Introduce arbitrary variables and re-call
+-- P(a,b|c)
+p states conds = alpha * p (states `union` conds) []
     where
-        allCondsAreParents :: Bool
-        allCondsAreParents = and [rvOf a `elem` parents (rvOf state) | a <- conds]
-
-        hasAllParents, hasArbConds :: Bool
-        hasAllParents = length (parents (rvOf state)) <= length conds
-        hasArbConds = or [True | (ARB _) <- conds]
-
-        positiveConds :: [RV]
-        positiveConds = [a | cond@(IS a) <- conds]
-
-
-p states conds | not hasAllRVs = -10
-                -- All parents in conds
-               | hasArbConds = 0
-                -- No arbitrary RVs
-               | otherwise = 10
-    where
-        allParents :: [RV]
-        allParents = foldl' union [] [parents (rvOf a) | a <- states]
-        family = (map rvOf states) `union` allParents -- All RVs in states, and their parents
-
-        hasAllRVs, hasArbConds :: Bool
-        -- Is entire family contained in states and conds
-        hasAllRVs = length family <= length (map rvOf states `union` map rvOf conds)
-        hasArbConds = or [True | (ARB _) <- conds]
-
-
-
--- Conditional Probability P(as | xs)
---       as          xs
-prob :: [BoolRV] -> [RV] -> Prob
-
-prob [] _ = 1
-
--- Single primitive boolean RV (no conditions)
-prob [PrimBoolRV _ p] _ = p
-
--- Single non-primitive boolean RV (no conditions)
--- P(a) = P(a | parents a) P(parent_1) ... P(parent_n)
---      = (1 - P(¬a | parents a)) P(p_1) ... P(p_n)
-prob [a] [] = (1 - a `inhibitionBy` parents a) * prob (parents a) []
-
--- Single boolean RV (conditions)
--- P(a|xs) = P(a) / (P(x_1) ... P(x_n))
-prob [a] xs
-    | not (null xsInParents) =
-        (1 - a `inhibitionBy` xsInParents) / product [prob [x] [] | x <- xsNotInParents]
-    | otherwise = prob [a] [] / product [prob [x] [] | x <- xs]
-    where
-        xsInParents = filter (`elem` parents a) xs
-        xsNotInParents = filter (`notElem` parents a) xs
-
--- Multiple boolean RVs (no conditions)
--- P(as) = product P(a | parents a)
-prob as [] = product [prob [a] (parents a) | a <- as]
-
-prob as xs = prob as [] / product [prob [x] [] | x <- xs]
+        alpha :: Float
+        alpha = 1 / (p (states `union` conds) [] + p (negateStates states `union` conds) [])
 
